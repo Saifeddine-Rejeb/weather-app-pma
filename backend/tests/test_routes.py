@@ -1,4 +1,5 @@
 import app.services.weather_service as weather_service
+import app.routes.weather_routes as weather_routes
 
 
 def test_weather_route_returns_200_with_valid_query(client, monkeypatch):
@@ -41,3 +42,16 @@ def test_weather_route_returns_500_on_service_failure(client, monkeypatch):
 
     assert response.status_code == 500
     assert response.get_json()["error"] == "failed to fetch weather"
+
+
+def test_forecast_route(client, monkeypatch):
+    monkeypatch.setattr(
+        weather_routes,
+        "get_forecast",
+        lambda _: {"city": "X", "forecast": []},
+    )
+
+    response = client.get("/forecast?q=X")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"city": "X", "forecast": []}

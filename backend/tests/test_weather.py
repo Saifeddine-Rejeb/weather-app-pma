@@ -1,6 +1,7 @@
 import app.services.weather_service as weather_service
 
 
+
 def test_get_weather_returns_formatted_data(monkeypatch):
 
     def fake_geocode(location):
@@ -28,3 +29,29 @@ def test_get_weather_returns_formatted_data(monkeypatch):
         "temperature": 22.5,
         "description": "clear sky",
     }
+
+
+def test_get_forecast(monkeypatch):
+    monkeypatch.setattr(
+        weather_service,
+        "geocode",
+        lambda _: {"lat": 1, "lon": 2, "city": "X", "country": "Y"},
+    )
+
+    monkeypatch.setattr(
+        weather_service,
+        "fetch_forecast",
+        lambda lat, lon: {
+            "list": [
+                {
+                    "dt": 1710000000,
+                    "main": {"temp": 20},
+                    "weather": [{"description": "clear"}],
+                }
+            ]
+        },
+    )
+
+    result = weather_service.get_forecast("X")
+
+    assert "forecast" in result
