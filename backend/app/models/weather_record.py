@@ -21,6 +21,7 @@ class WeatherRecord(db.Model):
     # Weather snapshot at time of record creation
     temperature = db.Column(db.Float)
     description = db.Column(db.String(200))
+    daily_temperatures = db.Column(db.JSON, nullable=False, default=list)
 
     created_at = db.Column(db.DateTime, server_default=func.now())
 
@@ -36,5 +37,6 @@ class WeatherRecord(db.Model):
             "end_date": self.end_date.isoformat(),
             "temperature": self.temperature,
             "description": self.description,
+            "daily_temperatures": self.daily_temperatures or [],
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

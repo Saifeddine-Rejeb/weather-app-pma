@@ -1,18 +1,15 @@
 import pytest
+from datetime import datetime, timedelta, timezone
 import app.services.weather_service as ws
 import app.services.records_service as rs
 import app.services.geocoding_service as geo_svc
 from app.exceptions import GeocodingError, InvalidDateRangeError, RecordNotFoundError
 
-FAKE_GEO = {"lat": 36.8, "lon": 10.18, "city": "Tunis", "country": "TN"}
-FAKE_WEATHER = {"temperature": 22.5, "description": "clear sky"}
-
-
 # ─── Weather Routes ────────────────────────────────────────────────────────────
 
 
-def test_weather_returns_200(client, monkeypatch):
-    monkeypatch.setattr(ws, "geocode", lambda _: FAKE_GEO)
+def test_weather_returns_200(client, monkeypatch, fake_geo):
+    monkeypatch.setattr(ws, "geocode", lambda _: fake_geo)
     monkeypatch.setattr(
         ws,
         "fetch_weather",
@@ -49,8 +46,8 @@ def test_weather_returns_422_on_bad_location(client, monkeypatch):
     assert r.status_code == 422
 
 
-def test_forecast_returns_200(client, monkeypatch):
-    monkeypatch.setattr(ws, "geocode", lambda _: FAKE_GEO)
+def test_forecast_returns_200(client, monkeypatch, fake_geo):
+    monkeypatch.setattr(ws, "geocode", lambda _: fake_geo)
     monkeypatch.setattr(
         ws,
         "fetch_forecast",
@@ -72,21 +69,22 @@ def test_forecast_returns_200(client, monkeypatch):
 # ─── Records Routes ────────────────────────────────────────────────────────────
 
 
-def _patch_create(monkeypatch):
+def _patch_create(monkeypatch, fake_geo, make_forecast_days):
     # Patch at both levels to ensure no real HTTP calls leak through
-    monkeypatch.setattr(rs, "geocode", lambda _: FAKE_GEO)
-    monkeypatch.setattr(rs, "get_weather", lambda _: FAKE_WEATHER)
-    monkeypatch.setattr(geo_svc, "geocode", lambda _: FAKE_GEO)
+    monkeypatch.setattr(rs, "geocode", lambda _: fake_geo)
+    monkeypatch.setattr(rs, "get_forecast", lambda _: make_forecast_days())
+    monkeypatch.setattr(geo_svc, "geocode", lambda _: fake_geo)
 
 
-def test_create_record_returns_201(client, monkeypatch):
-    _patch_create(monkeypatch)
+def test_create_record_returns_201(client, monkeypatch, fake_geo, make_forecast_days, valid_range):
+    _patch_create(monkeypatch, fake_geo, make_forecast_days)
+    start_date, end_date = valid_range
     r = client.post(
         "/records",
         json={
             "location": "Tunis",
-            "start_date": "2024-06-01",
-            "end_date": "2024-06-05",
+            "start_date": start_date,
+            "end_date": end_date,
         },
     )
     assert r.status_code == 201
@@ -108,14 +106,15 @@ def test_create_record_invalid_dates(client):
     assert r.status_code == 400
 
 
-def test_get_records_returns_list(client, monkeypatch):
-    _patch_create(monkeypatch)
+def test_get_records_returns_list(client, monkeypatch, fake_geo, make_forecast_days, valid_range):
+    _patch_create(monkeypatch, fake_geo, make_forecast_days)
+    start_date, end_date = valid_range
     client.post(
         "/records",
         json={
             "location": "Tunis",
-            "start_date": "2024-06-01",
-            "end_date": "2024-06-05",
+            "start_date": start_date,
+            "end_date": end_date,
         },
     )
     r = client.get("/records")
@@ -123,14 +122,15 @@ def test_get_records_returns_list(client, monkeypatch):
     assert isinstance(r.get_json(), list)
 
 
-def test_get_single_record(client, monkeypatch):
-    _patch_create(monkeypatch)
+def test_get_single_record(client, monkeypatch, fake_geo, make_forecast_days, valid_range):
+    _patch_create(monkeypatch, fake_geo, make_forecast_days)
+    start_date, end_date = valid_range
     created = client.post(
         "/records",
         json={
             "location": "Tunis",
-            "start_date": "2024-06-01",
-            "end_date": "2024-06-05",
+            "start_date": start_date,
+            "end_date": end_date,
         },
     ).get_json()
     r = client.get(f"/records/{created['id']}")
@@ -138,33 +138,36 @@ def test_get_single_record(client, monkeypatch):
     assert r.get_json()["id"] == created["id"]
 
 
-def test_update_record(client, monkeypatch):
-    _patch_create(monkeypatch)
+def test_update_record(client, monkeypatch, fake_geo, make_forecast_days, valid_range):
+    _patch_create(monkeypatch, fake_geo, make_forecast_days)
+    start_date, end_date = valid_range
     created = client.post(
         "/records",
         json={
             "location": "Tunis",
-            "start_date": "2024-06-01",
-            "end_date": "2024-06-05",
+            "start_date": start_date,
+            "end_date": end_date,
         },
     ).get_json()
 
     new_geo = {"lat": 48.8566, "lon": 2.3522, "city": "Paris", "country": "FR"}
     monkeypatch.setattr(rs, "geocode", lambda _: new_geo)
+    monkeypatch.setattr(rs, "get_forecast", lambda _: make_forecast_days())
 
     r = client.put(f"/records/{created['id']}", json={"location": "Paris"})
     assert r.status_code == 200
     assert r.get_json()["city"] == "Paris"
 
 
-def test_delete_record(client, monkeypatch):
-    _patch_create(monkeypatch)
+def test_delete_record(client, monkeypatch, fake_geo, make_forecast_days, valid_range):
+    _patch_create(monkeypatch, fake_geo, make_forecast_days)
+    start_date, end_date = valid_range
     created = client.post(
         "/records",
         json={
             "location": "Tunis",
-            "start_date": "2024-06-01",
-            "end_date": "2024-06-05",
+            "start_date": start_date,
+            "end_date": end_date,
         },
     ).get_json()
     r = client.delete(f"/records/{created['id']}")
@@ -178,14 +181,15 @@ def test_delete_nonexistent_record(client):
     assert r.status_code == 404
 
 
-def test_export_json(client, monkeypatch):
-    _patch_create(monkeypatch)
+def test_export_json(client, monkeypatch, fake_geo, make_forecast_days, valid_range):
+    _patch_create(monkeypatch, fake_geo, make_forecast_days)
+    start_date, end_date = valid_range
     client.post(
         "/records",
         json={
             "location": "Tunis",
-            "start_date": "2024-06-01",
-            "end_date": "2024-06-05",
+            "start_date": start_date,
+            "end_date": end_date,
         },
     )
     r = client.get("/records/export?format=json")
@@ -193,14 +197,15 @@ def test_export_json(client, monkeypatch):
     assert r.content_type == "application/json"
 
 
-def test_export_csv(client, monkeypatch):
-    _patch_create(monkeypatch)
+def test_export_csv(client, monkeypatch, fake_geo, make_forecast_days, valid_range):
+    _patch_create(monkeypatch, fake_geo, make_forecast_days)
+    start_date, end_date = valid_range
     client.post(
         "/records",
         json={
             "location": "Tunis",
-            "start_date": "2024-06-01",
-            "end_date": "2024-06-05",
+            "start_date": start_date,
+            "end_date": end_date,
         },
     )
     r = client.get("/records/export?format=csv")
@@ -208,14 +213,15 @@ def test_export_csv(client, monkeypatch):
     assert "text/csv" in r.content_type
 
 
-def test_export_xml(client, monkeypatch):
-    _patch_create(monkeypatch)
+def test_export_xml(client, monkeypatch, fake_geo, make_forecast_days, valid_range):
+    _patch_create(monkeypatch, fake_geo, make_forecast_days)
+    start_date, end_date = valid_range
     client.post(
         "/records",
         json={
             "location": "Tunis",
-            "start_date": "2024-06-01",
-            "end_date": "2024-06-05",
+            "start_date": start_date,
+            "end_date": end_date,
         },
     )
     r = client.get("/records/export?format=xml")
