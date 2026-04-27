@@ -24,7 +24,7 @@ const EXPORT_FORMATS = [
 function ConfirmDialog({ open, onOpenChange, onConfirm, loading }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-sm bg-white">
         <DialogHeader>
           <DialogTitle>Delete Record</DialogTitle>
           <DialogDescription>This action cannot be undone.</DialogDescription>
