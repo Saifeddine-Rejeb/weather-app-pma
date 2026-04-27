@@ -1,43 +1,86 @@
-import requests
 import os
+import requests
+from app.exceptions import GeocodingError
 
 API_KEY = os.getenv("WEATHER_API_KEY")
 GEO_BASE = "https://api.openweathermap.org/geo/1.0"
 
 
 def is_coords(location: str) -> bool:
+    """Detect 'lat,lon' format."""
     try:
-        lat, lon = map(float, location.split(","))
+        parts = location.split(",")
+        if len(parts) != 2:
+            return False
+        float(parts[0].strip())
+        float(parts[1].strip())
         return True
-    except:
+    except (ValueError, AttributeError):
         return False
 
 
 def is_zip(location: str) -> bool:
-    return location.replace(" ", "").isalnum() and any(c.isdigit() for c in location)
+    """Detect zip/postal code — alphanumeric with at least one digit."""
+    stripped = location.replace(" ", "").replace("-", "")
+    return (
+        stripped.isalnum()
+        and any(c.isdigit() for c in stripped)
+        and len(stripped) <= 10
+    )
 
 
-def parse_coords(location: str):
-    lat, lon = map(float, location.split(","))
+def parse_coords(location: str) -> dict:
+    parts = location.split(",")
     return {
-        "lat": lat,
-        "lon": lon,
+        "lat": float(parts[0].strip()),
+        "lon": float(parts[1].strip()),
         "city": None,
         "country": None,
     }
 
 
-def geocode_zip(location: str):
-    resp = requests.get(
-        f"{GEO_BASE}/zip",
-        params={"zip": location, "appid": API_KEY},
-        timeout=5,
-    )
-
-    if resp.status_code != 200:
+def geocode_zip(location: str) -> dict | None:
+    """Try OpenWeather zip geocoding. Returns None if not found."""
+    try:
+        resp = requests.get(
+            f"{GEO_BASE}/zip",
+            params={"zip": location, "appid": API_KEY},
+            timeout=5,
+        )
+        if resp.status_code != 200:
+            return None
+        d = resp.json()
+        if "lat" not in d:
+            return None
+        return {
+            "lat": d["lat"],
+            "lon": d["lon"],
+            "city": d.get("name"),
+            "country": d.get("country"),
+        }
+    except requests.RequestException:
         return None
 
-    d = resp.json()
+
+def geocode_text(location: str) -> dict:
+    """Geocode a free-text location name. Raises GeocodingError if nothing found."""
+    try:
+        resp = requests.get(
+            f"{GEO_BASE}/direct",
+            params={"q": location, "limit": 1, "appid": API_KEY},
+            timeout=5,
+        )
+        resp.raise_for_status()
+        results = resp.json()
+    except requests.Timeout:
+        raise GeocodingError(f"Geocoding request timed out for: {location}")
+    except requests.RequestException as e:
+        raise GeocodingError(f"Geocoding request failed: {str(e)}")
+
+    if not results:
+        raise GeocodingError(f"Location not found: '{location}'")
+
+    d = results[0]
     return {
         "lat": d["lat"],
         "lon": d["lon"],
@@ -46,26 +89,17 @@ def geocode_zip(location: str):
     }
 
 
-def geocode_text(location: str):
-    resp = requests.get(
-        f"{GEO_BASE}/direct",
-        params={"q": location, "limit": 1, "appid": API_KEY},
-        timeout=5,
-    )
+def geocode(location: str) -> dict:
+    """
+    Resolve any location string to {lat, lon, city, country}.
+    Strategy: coordinates → zip code → free text.
+    Raises GeocodingError if all strategies fail.
+    """
+    location = location.strip()
 
-    if resp.status_code != 200 or not resp.json():
-        raise Exception("Could not geocode location")
+    if not location:
+        raise GeocodingError("Location cannot be empty.")
 
-    d = resp.json()[0]
-    return {
-        "lat": d["lat"],
-        "lon": d["lon"],
-        "city": d.get("name"),
-        "country": d.get("country"),
-    }
-
-
-def geocode(location: str):
     if is_coords(location):
         return parse_coords(location)
 
@@ -73,5 +107,6 @@ def geocode(location: str):
         result = geocode_zip(location)
         if result:
             return result
+        # Fall through to text if zip returned nothing
 
     return geocode_text(location)
