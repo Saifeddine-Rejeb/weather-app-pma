@@ -42,7 +42,7 @@ def export_xml(records: list[WeatherRecord]) -> str:
 EXPORT_FORMATS = {
     "json": ("application/json", "records.json", export_json),
     "csv": ("text/csv", "records.csv", export_csv),
-    "xml": ("application/xml", "records.xml", export_xml),
+    "xml": ("application/xml", "records.xml", export_xml),"
 }
 
 

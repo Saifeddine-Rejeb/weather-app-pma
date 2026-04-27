@@ -18,7 +18,6 @@ const EXPORT_FORMATS = [
   { value: "json", label: "JSON", icon: FileJson },
   { value: "csv", label: "CSV", icon: FileSpreadsheet },
   { value: "xml", label: "XML", icon: FileCode },
-  { value: "markdown", label: "Markdown", icon: FileText },
 ];
 
 function ConfirmDialog({ open, onOpenChange, onConfirm, loading }) {
