@@ -123,7 +123,7 @@ export default function RecordsTab() {
             <SelectTrigger className="h-8 w-32 text-xs">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-white">
               {EXPORT_FORMATS.map((f) => (
                 <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
               ))}
