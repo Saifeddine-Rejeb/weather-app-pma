@@ -25,6 +25,7 @@ wheels/
 MANIFEST
 .env
 .env.local
+instance/
 
 # Node/React
 node_modules/
